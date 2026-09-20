@@ -4,7 +4,22 @@ MCP Server exposing Kubernetes Diagnostics and Self-Healing Tools with OpenTelem
 import json
 from typing import Any, Dict, List, Optional
 from opentelemetry import trace
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except (ImportError, ModuleNotFoundError):
+    try:
+        from mcp.server.mcpserver import MCPServer as FastMCP
+    except (ImportError, ModuleNotFoundError):
+        class FastMCP:  # type: ignore
+            def __init__(self, name: str):
+                self.name = name
+            def tool(self):
+                def decorator(fn):
+                    return fn
+                return decorator
+            def run(self, transport: str = "stdio"):
+                pass
+
 from src.server.k8s_telemetry import K8sClusterTelemetry
 
 tracer = trace.get_tracer("agentic.mcp.k8s_tools")

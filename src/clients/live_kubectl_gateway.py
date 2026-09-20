@@ -138,6 +138,12 @@ class LiveKubectlGateway(IToolGateway):
 
     def _patch_deployment_resources(self, namespace: str, deployment_name: str, memory_limit: str = "512Mi") -> Dict[str, Any]:
         self._run_kubectl(["set", "resources", f"deployment/{deployment_name}", "-n", namespace, f"--limits=memory={memory_limit}"])
+        # Wait for Kubernetes rolling update to complete so new pods become Ready
+        try:
+            self._run_kubectl(["rollout", "status", f"deployment/{deployment_name}", "-n", namespace, "--timeout=25s"])
+        except Exception as e:
+            logger.warning(f"Rollout status wait timed out: {e}")
+
         return {
             "status": "Patched",
             "deployment": deployment_name,
@@ -146,4 +152,8 @@ class LiveKubectlGateway(IToolGateway):
 
     def _restart_deployment(self, namespace: str, deployment_name: str) -> Dict[str, Any]:
         self._run_kubectl(["rollout", "restart", f"deployment/{deployment_name}", "-n", namespace])
+        try:
+            self._run_kubectl(["rollout", "status", f"deployment/{deployment_name}", "-n", namespace, "--timeout=25s"])
+        except Exception as e:
+            logger.warning(f"Rollout status wait timed out: {e}")
         return {"status": "RestartTriggered", "deployment": deployment_name}

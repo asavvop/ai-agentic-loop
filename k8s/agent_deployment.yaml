@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-self-healing-agent
+  namespace: default
+  labels:
+    app: self-healing-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: self-healing-agent
+  template:
+    metadata:
+      labels:
+        app: self-healing-agent
+    spec:
+      serviceAccountName: k8s-self-healing-agent-sa
+      containers:
+      - name: agent
+        image: k8s-self-healing-agent:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TARGET_NAMESPACE
+          value: "production"
+        - name: POLL_INTERVAL_SECONDS
+          value: "15"
+        - name: LLM_MODEL
+          value: "llama3.1:latest"
+        # Points to the host Ollama instance via default gateway or internal service
+        - name: LLM_ENDPOINT
+          value: "http://172.26.192.1:11434/api/chat"
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"

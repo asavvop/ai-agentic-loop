@@ -64,6 +64,15 @@ class FSMRunner:
 
             next_state = handler.evaluate_transition(context, decision, tool_result)
             context.record_step(current_state, next_state, decision, tool_result.output if tool_result else None)
+
+            # Detailed step logging
+            action_str = f"{decision.get('action')}({decision.get('action_args', {})})" if decision.get('action') else "No Action"
+            logger.info(f"Step {context.step_count}: [{current_state.name} ➔ {next_state.name}] | Action: {action_str}")
+            logger.info(f"  Reasoning: {decision.get('reasoning')}")
+            if tool_result and tool_result.success and tool_result.output is not None:
+                out_summary = str(tool_result.output).replace("\n", " ")[:140]
+                logger.info(f"  Tool Output: {out_summary}...")
+
             context.transition_to(next_state)
 
         logger.info(f"FSM Terminated in state: {context.state.name} after {context.step_count} steps.")
@@ -89,7 +98,6 @@ class FSMRunner:
             )
 
         args = dict(decision.get("action_args", {}) or {})
-        # Contextual fallback for common required arguments
         if "namespace" not in args and context.target_namespace:
             args["namespace"] = context.target_namespace
         if "deployment_name" not in args and context.target_workload:
