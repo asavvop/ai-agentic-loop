@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: production
+  labels:
+    app: payment-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-gateway
+        image: python:3.11-slim
+        command: ["python", "-u", "-c"]
+        # Deliberately allocates 128MB while the container limit is 64MB -> Triggers Linux OOMKilled
+        args:
+          - |
+            import time
+            print("[INFO] Starting Payment Gateway Service...", flush=True)
+            print("[INFO] Initializing transaction buffers (pool_size=10000)...", flush=True)
+            print("[ERROR] Exception in thread 'main' java.lang.OutOfMemoryError: Java heap space", flush=True)
+            time.sleep(1)
+            # Allocate memory beyond 64Mi to force kernel OOM killer
+            data = bytearray(128 * 1024 * 1024)
+            time.sleep(30)
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "200m"
+          requests:
+            memory: "32Mi"
+            cpu: "100m"
