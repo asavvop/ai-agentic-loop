@@ -76,9 +76,9 @@ def test_daemon_cycle_skips_when_healthy():
     observer = MockObserver()
 
     engine = DaemonEngine(watcher, runner, config, observers=[observer])
-    result = engine.run_cycle()
+    results = engine.run_cycle()
 
-    assert result is None
+    assert results == []
     assert observer.cycle_starts == 1
     assert observer.triggers == 0
     assert observer.completions == 0
@@ -91,17 +91,33 @@ def test_daemon_cycle_triggers_fsm_when_anomalies_found():
     observer = MockObserver()
 
     engine = DaemonEngine(watcher, runner, config, observers=[observer])
-    result = engine.run_cycle()
+    results = engine.run_cycle()
 
-    assert result is not None
-    assert result.state == AgentState.RESOLVED
+    assert len(results) == 1
+    assert results[0].state == AgentState.RESOLVED
     assert observer.cycle_starts == 1
     assert observer.triggers == 1
     assert observer.completions == 1
 
 
+def test_daemon_cycle_multi_namespace():
+    watcher = MockClusterWatcher([
+        [{"pod_name": "pod-1", "status": "OOMKilled"}],  # production has anomaly
+        []                                               # default is healthy
+    ])
+    runner = FSMRunner(MockLLM(), MockGateway(), {AgentState.TRIAGE: DummyTriage()})
+    config = DaemonConfig("production,default", 10, "http://localhost:11434/api/chat", "llama3.1", "")
+    observer = MockObserver()
+
+    engine = DaemonEngine(watcher, runner, config, observers=[observer])
+    results = engine.run_cycle()
+
+    assert len(results) == 1
+    assert observer.cycle_starts == 2
+    assert observer.triggers == 1
+
+
 def test_daemon_engine_start_bounded_cycles():
-    # 2 cycles executed -> 1 sleep between cycle 1 and cycle 2
     watcher = MockClusterWatcher([[], []])
     runner = FSMRunner(MockLLM(), MockGateway(), {AgentState.TRIAGE: DummyTriage()})
     config = DaemonConfig("production", 10, "http://localhost:11434/api/chat", "llama3.1", "")

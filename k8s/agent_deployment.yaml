@@ -22,7 +22,7 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: TARGET_NAMESPACE
-          value: "production"
+          value: "production,default"
         - name: POLL_INTERVAL_SECONDS
           value: "15"
         - name: LLM_MODEL

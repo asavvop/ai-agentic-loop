@@ -91,7 +91,22 @@ class LiveKubectlGateway(IToolGateway):
                         is_pod_unhealthy = True
 
             if is_pod_unhealthy or restart_count > 0:
-                workload_name = item["metadata"].get("labels", {}).get("app") or pod_name.split("-")[0]
+                # Resolve exact parent workload name via ownerReferences
+                workload_name = None
+                owners = item["metadata"].get("ownerReferences", [])
+                for owner in owners:
+                    if owner.get("kind") == "ReplicaSet":
+                        # ReplicaSet name is <deployment-name>-<hash>
+                        rs_name = owner.get("name", "")
+                        workload_name = rs_name.rsplit("-", 1)[0]
+                        break
+                    elif owner.get("kind") in ["Deployment", "StatefulSet", "DaemonSet"]:
+                        workload_name = owner.get("name")
+                        break
+
+                if not workload_name:
+                    workload_name = item["metadata"].get("labels", {}).get("app") or pod_name.split("-")[0]
+
                 unhealthy.append({
                     "pod_name": pod_name,
                     "namespace": namespace,

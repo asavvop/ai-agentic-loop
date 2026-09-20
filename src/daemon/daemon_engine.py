@@ -14,7 +14,7 @@ logger = logging.getLogger("DaemonEngine")
 
 class DaemonEngine:
     """
-    Coordinates continuous observation cycles, anomaly evaluation, and FSM invocation.
+    Coordinates continuous observation cycles across one or more target namespaces.
     """
 
     def __init__(
@@ -32,34 +32,39 @@ class DaemonEngine:
         self._sleeper = sleeper
         self._running = False
 
-    def run_cycle(self) -> Optional[AgentContext]:
-        """Executes a single observation and healing tick."""
-        namespace = self._config.target_namespace
-        for obs in self._observers:
-            obs.on_cycle_start(namespace)
+    def run_cycle(self) -> List[AgentContext]:
+        """Executes observation and healing across all configured target namespaces."""
+        # Support single or comma-separated namespaces (e.g. "production,default")
+        namespaces = [ns.strip() for ns in self._config.target_namespace.split(",") if ns.strip()]
+        healed_contexts = []
 
-        anomalies = self._watcher.detect_anomalies(namespace)
-        if not anomalies:
-            logger.debug(f"Namespace '{namespace}' is healthy. No action required.")
-            return None
+        for namespace in namespaces:
+            for obs in self._observers:
+                obs.on_cycle_start(namespace)
 
-        logger.warning(f"Detected {len(anomalies)} anomalous pod(s) in '{namespace}'. Triggering FSM...")
-        for obs in self._observers:
-            obs.on_self_healing_triggered(namespace, anomalies)
+            anomalies = self._watcher.detect_anomalies(namespace)
+            if not anomalies:
+                logger.debug(f"Namespace '{namespace}' is healthy. No action required.")
+                continue
 
-        context = AgentContext(target_namespace=namespace)
-        final_context = self._fsm_runner.run(context)
+            logger.warning(f"Detected {len(anomalies)} anomalous pod(s) in '{namespace}'. Triggering FSM...")
+            for obs in self._observers:
+                obs.on_self_healing_triggered(namespace, anomalies)
 
-        for obs in self._observers:
-            obs.on_self_healing_completed(final_context)
+            context = AgentContext(target_namespace=namespace)
+            final_context = self._fsm_runner.run(context)
+            healed_contexts.append(final_context)
 
-        return final_context
+            for obs in self._observers:
+                obs.on_self_healing_completed(final_context)
+
+        return healed_contexts
 
     def start(self, max_cycles: Optional[int] = None) -> None:
         """Starts the continuous loop with configurable cycle count for testing/daemon mode."""
         self._running = True
         cycles_completed = 0
-        logger.info(f"Daemon started. Target Namespace: {self._config.target_namespace} | Interval: {self._config.poll_interval_seconds}s")
+        logger.info(f"Daemon started. Target Namespace(s): {self._config.target_namespace} | Interval: {self._config.poll_interval_seconds}s")
 
         while self._running:
             try:
